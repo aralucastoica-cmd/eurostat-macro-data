@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eurostat Macro Data</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --navy:   #0d1b2a;
+      --navy2:  #1a3a5c;
+      --gold:   #c9a227;
+      --gold2:  #e8c84a;
+      --white:  #ffffff;
+      --gray:   #f5f7fa;
+      --text:   #2d3748;
+      --muted:  #64748b;
+      --border: #e2e8f0;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--gray);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ───────────────────────────────────────────────────────── */
+    header {
+      background: var(--navy);
+      padding: 0 40px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    }
+    .logo {
+      width: 38px; height: 38px;
+      background: var(--gold);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; flex-shrink: 0;
+    }
+    .logo-text h1 { color: #fff; font-size: 1.2rem; font-weight: 700; }
+    .logo-text p  { color: var(--gold); font-size: 0.75rem; margin-top: 1px; }
+
+    /* ── LAYOUT ───────────────────────────────────────────────────────── */
+    .container { max-width: 1150px; margin: 0 auto; padding: 28px 20px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 290px 1fr;
+      gap: 22px;
+      align-items: start;
+    }
+
+    /* ── SIDEBAR ──────────────────────────────────────────────────────── */
+    .sidebar { position: sticky; top: 24px; }
+
+    .card {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--navy);
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--gold);
+    }
+
+    /* countries */
+    .geo-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; padding-right: 4px; }
+    .geo-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 11px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      cursor: pointer;
+      transition: all .15s;
+      user-select: none;
+    }
+    .geo-item:hover    { background: var(--gray); }
+    .geo-item.selected { border-color: var(--navy); background: #f0f4f8; }
+    .geo-item input    { width:15px; height:15px; accent-color:var(--navy); cursor:pointer; }
+    .geo-flag          { font-size: 1.1rem; }
+    .geo-label         { font-size: .85rem; font-weight: 500; }
+
+    /* year range */
+    .year-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .year-group label { font-size:.72rem; font-weight:600; color:var(--muted); display:block; margin-bottom:4px; }
+    .year-group input {
+      width:100%; padding:8px 10px;
+      border:1.5px solid var(--border); border-radius:7px;
+      font-size:.9rem; color:var(--text); outline:none; transition:border .15s;
+    }
+    .year-group input:focus { border-color:var(--navy); }
+
+    /* download button */
+    #btn-dl {
+      width:100%; padding:13px;
+      background: var(--navy); color: #fff;
+      border:none; border-radius:10px;
+      font-size:.98rem; font-weight:700;
+      cursor:pointer; transition:all .2s;
+      display:flex; align-items:center; justify-content:center; gap:8px;
+    }
+    #btn-dl:hover    { background:var(--navy2); transform:translateY(-1px); box-shadow:0 4px 14px rgba(13,27,42,.3); }
+    #btn-dl:active   { transform:translateY(0); }
+    #btn-dl:disabled { opacity:.6; cursor:not-allowed; transform:none; box-shadow:none; }
+
+    /* ── MAIN CONTENT ──────────────────────────────────────────────────── */
+    .toolbar {
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom: 12px;
+    }
+    .toolbar h2 { font-size:1rem; font-weight:700; color:var(--navy); }
+    .toolbar-btns { display:flex; gap:6px; }
+    .btn-sm {
+      padding:6px 13px; border-radius:6px;
+      font-size:.78rem; font-weight:600; cursor:pointer; transition:all .15s;
+    }
+    .btn-fill   { background:var(--navy); color:#fff; border:none; }
+    .btn-fill:hover { background:var(--navy2); }
+    .btn-outline { background:transparent; color:var(--navy); border:1.5px solid var(--navy); }
+    .btn-outline:hover { background:#eef2f7; }
+
+    .chips { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+    .chip {
+      background: var(--white);
+      border:1.5px solid var(--border);
+      border-radius:20px; padding:5px 13px;
+      font-size:.78rem; color:var(--text); font-weight:500;
+    }
+    .chip strong { color:var(--navy); }
+
+    /* ── ACCORDION ─────────────────────────────────────────────────────── */
+    .acc-card {
+      background: var(--white);
+      border-radius: 11px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      overflow: hidden;
+    }
+    .acc-header {
+      padding: 13px 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: space-between;
+      transition: background .12s; user-select: none;
+    }
+    .acc-header:hover         { background: #f8fafc; }
+    .acc-header.open          { background: var(--navy); }
+    .acc-left                 { display:flex; align-items:center; gap:11px; }
+    .acc-cb                   { width:17px; height:17px; accent-color:var(--gold); cursor:pointer; flex-shrink:0; }
+    .acc-name                 { font-size:.92rem; font-weight:700; color:var(--navy); }
+    .acc-header.open .acc-name{ color:var(--gold); }
+    .acc-count {
+      font-size:.72rem; font-weight:600;
+      padding:3px 8px; background:var(--gray);
+      border-radius:12px; color:var(--muted);
+    }
+    .acc-header.open .acc-count { background:rgba(201,162,39,.2); color:var(--gold); }
+    .acc-arrow { font-size:.75rem; color:#94a3b8; transition:transform .2s; }
+    .acc-header.open .acc-arrow { transform:rotate(180deg); color:var(--gold); }
+
+    .acc-body {
+      display:none; padding:4px 16px 12px;
+      border-top:1px solid var(--border);
+    }
+    .acc-body.open { display:block; }
+
+    .ind-item {
+      display:flex; align-items:center; gap:9px;
+      padding:7px 5px; border-radius:6px; cursor:pointer; transition:background .1s;
+    }
+    .ind-item:hover { background:var(--gray); }
+    .ind-item input { width:14px; height:14px; accent-color:var(--navy); cursor:pointer; flex-shrink:0; }
+    .ind-name { font-size:.83rem; color:var(--text); line-height:1.3; }
+
+    /* ── LOADING OVERLAY ────────────────────────────────────────────────── */
+    #overlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(13,27,42,.88);
+      z-index:9999;
+      flex-direction:column; align-items:center; justify-content:center; gap:18px;
+    }
+    #overlay.show { display:flex; }
+    .spinner {
+      width:52px; height:52px;
+      border:4px solid rgba(201,162,39,.25);
+      border-top-color:var(--gold);
+      border-radius:50%;
+      animation:spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .ov-title { color:#fff; font-size:1.1rem; font-weight:600; }
+    .ov-sub   { color:var(--gold); font-size:.83rem; margin-top:-8px; text-align:center; }
+
+    /* progress bar */
+    .prog-bar {
+      width:280px; height:6px;
+      background:rgba(255,255,255,.15);
+      border-radius:3px; overflow:hidden;
+    }
+    .prog-fill {
+      height:100%; background:var(--gold);
+      border-radius:3px;
+      width:0%; transition:width .4s;
+      animation:prog-anim 2s ease-in-out infinite;
+    }
+    @keyframes prog-anim { 0%{width:5%} 50%{width:80%} 100%{width:95%} }
+
+    /* ── TOAST ──────────────────────────────────────────────────────────── */
+    #toast {
+      position:fixed; bottom:22px; right:22px;
+      background:var(--white); border-radius:10px;
+      padding:13px 18px;
+      box-shadow:0 4px 20px rgba(0,0,0,.15);
+      font-size:.88rem; font-weight:500;
+      transform:translateY(120px); transition:transform .3s;
+      z-index:10000; max-width:340px;
+    }
+    #toast.show         { transform:translateY(0); }
+    #toast.ok           { border-left:4px solid #22c55e; }
+    #toast.err          { border-left:4px solid #ef4444; }
+    #toast.warn         { border-left:4px solid #f59e0b; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">📊</div>
+  <div class="logo-text">
+    <h1>Eurostat Macro Data</h1>
+    <p>Descarca date macroeconomice oficiale cu un singur click</p>
+  </div>
+</header>
+
+<!-- MAIN -->
+<div class="container">
+  <div class="grid">
+
+    <!-- ── SIDEBAR ── -->
+    <aside class="sidebar">
+
+      <!-- Countries -->
+      <div class="card">
+        <div class="card-title">🌍 Tari / Regiuni</div>
+        <div class="geo-list" id="geo-list">
+          <!-- Agregate -->
+          <label class="geo-item selected">
+            <input type="checkbox" name="geo" value="RO" checked>
+            <span class="geo-flag">🇷🇴</span>
+            <span class="geo-label">Romania</span>
+          </label>
+          <label class="geo-item selected">
+            <input type="checkbox" name="geo" value="EU27_2020" checked>
+            <span class="geo-flag">🇪🇺</span>
+            <span class="geo-label">UE-27 (medie)</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="EA20">
+            <span class="geo-flag">💶</span>
+            <span class="geo-label">Zona Euro (20)</span>
+          </label>
+          <!-- Tari UE27 in ordine alfabetica -->
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="AT">
+            <span class="geo-flag">🇦🇹</span>
+            <span class="geo-label">Austria</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="BE">
+            <span class="geo-flag">🇧🇪</span>
+            <span class="geo-label">Belgia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="BG">
+            <span class="geo-flag">🇧🇬</span>
+            <span class="geo-label">Bulgaria</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="CY">
+            <span class="geo-flag">🇨🇾</span>
+            <span class="geo-label">Cipru</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="CZ">
+            <span class="geo-flag">🇨🇿</span>
+            <span class="geo-label">Cehia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="DE">
+            <span class="geo-flag">🇩🇪</span>
+            <span class="geo-label">Germania</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="DK">
+            <span class="geo-flag">🇩🇰</span>
+            <span class="geo-label">Danemarca</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="EE">
+            <span class="geo-flag">🇪🇪</span>
+            <span class="geo-label">Estonia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="ES">
+            <span class="geo-flag">🇪🇸</span>
+            <span class="geo-label">Spania</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="FI">
+            <span class="geo-flag">🇫🇮</span>
+            <span class="geo-label">Finlanda</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="FR">
+            <span class="geo-flag">🇫🇷</span>
+            <span class="geo-label">Franta</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="GR">
+            <span class="geo-flag">🇬🇷</span>
+            <span class="geo-label">Grecia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="HR">
+            <span class="geo-flag">🇭🇷</span>
+            <span class="geo-label">Croatia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="HU">
+            <span class="geo-flag">🇭🇺</span>
+            <span class="geo-label">Ungaria</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="IE">
+            <span class="geo-flag">🇮🇪</span>
+            <span class="geo-label">Irlanda</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="IT">
+            <span class="geo-flag">🇮🇹</span>
+            <span class="geo-label">Italia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="LT">
+            <span class="geo-flag">🇱🇹</span>
+            <span class="geo-label">Lituania</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="LU">
+            <span class="geo-flag">🇱🇺</span>
+            <span class="geo-label">Luxemburg</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="LV">
+            <span class="geo-flag">🇱🇻</span>
+            <span class="geo-label">Letonia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="MT">
+            <span class="geo-flag">🇲🇹</span>
+            <span class="geo-label">Malta</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="NL">
+            <span class="geo-flag">🇳🇱</span>
+            <span class="geo-label">Olanda</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="PL">
+            <span class="geo-flag">🇵🇱</span>
+            <span class="geo-label">Polonia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="PT">
+            <span class="geo-flag">🇵🇹</span>
+            <span class="geo-label">Portugalia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="SE">
+            <span class="geo-flag">🇸🇪</span>
+            <span class="geo-label">Suedia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="SI">
+            <span class="geo-flag">🇸🇮</span>
+            <span class="geo-label">Slovenia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="SK">
+            <span class="geo-flag">🇸🇰</span>
+            <span class="geo-label">Slovacia</span>
+          </label>
+          <!-- Tari candidate UE -->
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;padding:8px 4px 4px;border-top:1px solid var(--border);margin-top:4px;">Candidate UE</div>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="AL">
+            <span class="geo-flag">🇦🇱</span>
+            <span class="geo-label">Albania</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="BA">
+            <span class="geo-flag">🇧🇦</span>
+            <span class="geo-label">Bosnia-Hertegovina</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="GE">
+            <span class="geo-flag">🇬🇪</span>
+            <span class="geo-label">Georgia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="MD">
+            <span class="geo-flag">🇲🇩</span>
+            <span class="geo-label">Moldova</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="ME">
+            <span class="geo-flag">🇲🇪</span>
+            <span class="geo-label">Muntenegru</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="MK">
+            <span class="geo-flag">🇲🇰</span>
+            <span class="geo-label">Macedonia de Nord</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="RS">
+            <span class="geo-flag">🇷🇸</span>
+            <span class="geo-label">Serbia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="TR">
+            <span class="geo-flag">🇹🇷</span>
+            <span class="geo-label">Turcia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="UA">
+            <span class="geo-flag">🇺🇦</span>
+            <span class="geo-label">Ucraina</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="XK">
+            <span class="geo-flag">🏳️</span>
+            <span class="geo-label">Kosovo</span>
+          </label>
+          <!-- EEA / Alte tari europene -->
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;padding:8px 4px 4px;border-top:1px solid var(--border);margin-top:4px;">EEA / Alte tari</div>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="CH">
+            <span class="geo-flag">🇨🇭</span>
+            <span class="geo-label">Elvetia</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="GB">
+            <span class="geo-flag">🇬🇧</span>
+            <span class="geo-label">Marea Britanie</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="IS">
+            <span class="geo-flag">🇮🇸</span>
+            <span class="geo-label">Islanda</span>
+          </label>
+          <label class="geo-item">
+            <input type="checkbox" name="geo" value="NO">
+            <span class="geo-flag">🇳🇴</span>
+            <span class="geo-label">Norvegia</span>
+          </label>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px;">
+          <button type="button" class="btn-sm btn-fill" style="flex:1;font-size:.75rem;padding:7px"
+                  onclick="selectAllGeo()">Selecteaza toate</button>
+          <button type="button" class="btn-sm btn-outline" style="flex:1;font-size:.75rem;padding:7px"
+                  onclick="deselectAllGeo()">Deselecteaza</button>
+        </div>
+      </div>
+
+      <!-- Period -->
+      <div class="card">
+        <div class="card-title">📅 Perioada</div>
+        <div class="year-row">
+          <div class="year-group">
+            <label>De la</label>
+            <input type="number" id="y-start" value="2010" min="1995" max="2025">
+          </div>
+          <div class="year-group">
+            <label>Pana la</label>
+            <input type="number" id="y-end" value="2024" min="1995" max="2025">
+          </div>
+        </div>
+      </div>
+
+      <!-- Download -->
+      <button id="btn-dl" onclick="startDownload()">
+        <span>⬇️</span> Descarca Excel
+      </button>
+
+    </aside>
+
+    <!-- ── MAIN CONTENT ── -->
+    <main>
+      <div class="toolbar">
+        <h2>Selecteaza Indicatorii</h2>
+        <div class="toolbar-btns">
+          <button class="btn-sm btn-fill"    onclick="selectAll()">Selecteaza tot</button>
+          <button class="btn-sm btn-outline"  onclick="deselectAll()">Deselecteaza</button>
+        </div>
+      </div>
+
+      <div class="chips">
+        <div class="chip">Total: <strong id="cnt-total">0</strong> indicatori</div>
+        <div class="chip">Selectati: <strong id="cnt-sel">0</strong></div>
+        <div class="chip" id="chip-cats">Categorii: <strong id="cnt-cats">0</strong></div>
+      </div>
+
+      <div id="acc-container">
+        {% for category, indicators in categories.items() %}
+        <div class="acc-card">
+          <div class="acc-header {% if loop.index <= 4 %}open{% endif %}"
+               onclick="toggleAcc(this)">
+            <div class="acc-left">
+              <input type="checkbox" class="acc-cb"
+                     onclick="toggleCatAll(event,'{{ category }}')"
+                     id="cat-cb-{{ loop.index }}">
+              <span class="acc-name">{{ category }}</span>
+              <span class="acc-count">{{ indicators|length }}</span>
+            </div>
+            <span class="acc-arrow">▼</span>
+          </div>
+          <div class="acc-body {% if loop.index <= 4 %}open{% endif %}">
+            {% for ind in indicators %}
+            <label class="ind-item">
+              <input type="checkbox" class="ind-cb"
+                     data-cat="{{ category }}"
+                     value="{{ ind.id }}"
+                     onchange="sync()">
+              <span class="ind-name">{{ ind.name }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- OVERLAY -->
+<div id="overlay">
+  <div class="spinner"></div>
+  <div class="ov-title">Se descarca datele de la Eurostat...</div>
+  <div class="ov-sub">Conectare la API · Procesare date · Generare Excel<br>Te rog asteapta (30–60 sec)</div>
+  <div class="prog-bar"><div class="prog-fill"></div></div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+  // ── Geo toggle ─────────────────────────────────────────────────────────────
+  document.querySelectorAll('.geo-item input').forEach(cb => {
+    cb.addEventListener('change', () =>
+      cb.closest('.geo-item').classList.toggle('selected', cb.checked));
+  });
+
+  // ── Accordion ──────────────────────────────────────────────────────────────
+  function toggleAcc(header) {
+    const body = header.nextElementSibling;
+    body.classList.toggle('open');
+    header.classList.toggle('open');
+  }
+
+  function toggleCatAll(e, cat) {
+    e.stopPropagation();
+    const cbs = document.querySelectorAll(`.ind-cb[data-cat="${cat}"]`);
+    cbs.forEach(c => c.checked = e.target.checked);
+    sync();
+  }
+
+  // ── Sync counts & category checkboxes ──────────────────────────────────────
+  function sync() {
+    const all  = document.querySelectorAll('.ind-cb');
+    const sel  = document.querySelectorAll('.ind-cb:checked');
+    document.getElementById('cnt-total').textContent = all.length;
+    document.getElementById('cnt-sel').textContent   = sel.length;
+
+    const cats = new Set([...sel].map(c => c.dataset.cat));
+    document.getElementById('cnt-cats').textContent  = cats.size;
+
+    document.querySelectorAll('.acc-card').forEach(card => {
+      const cbs     = card.querySelectorAll('.ind-cb');
+      const checked = card.querySelectorAll('.ind-cb:checked');
+      const catCb   = card.querySelector('.acc-cb');
+      if (!catCb) return;
+      catCb.checked       = checked.length === cbs.length && cbs.length > 0;
+      catCb.indeterminate = checked.length > 0 && checked.length < cbs.length;
+    });
+  }
+
+  function selectAll()   { document.querySelectorAll('.ind-cb').forEach(c => c.checked=true);  sync(); }
+  function deselectAll() { document.querySelectorAll('.ind-cb').forEach(c => c.checked=false); sync(); }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  function toast(msg, type='ok') {
+    const t = document.getElementById('toast');
+    const icon = type==='ok' ? '✅' : type==='warn' ? '⚠️' : '❌';
+    t.innerHTML = `${icon} ${msg}`;
+    t.className = `toast show ${type}`;
+    setTimeout(() => t.classList.remove('show'), 5000);
+  }
+
+  // ── Download ───────────────────────────────────────────────────────────────
+  async function startDownload() {
+    const geos = [...document.querySelectorAll('input[name="geo"]:checked')].map(c => c.value);
+    if (!geos.length) { toast('Selecteaza cel putin o tara!','err'); return; }
+
+    const sel = [...document.querySelectorAll('.ind-cb:checked')].map(c => c.value);
+    if (!sel.length)  { toast('Selecteaza cel putin un indicator!','err'); return; }
+
+    const ys = parseInt(document.getElementById('y-start').value);
+    const ye = parseInt(document.getElementById('y-end').value);
+    if (ys > ye)      { toast('Anul de inceput > Anul final!','err'); return; }
+
+    const btn = document.getElementById('btn-dl');
+    btn.disabled = true;
+    document.getElementById('overlay').classList.add('show');
+
+    try {
+      const res = await fetch('/download', {
+        method:  'POST',
+        headers: {'Content-Type':'application/json'},
+        body:    JSON.stringify({indicators: sel, geos, year_start: ys, year_end: ye})
+      });
+
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `Eurostat_${new Date().toISOString().slice(0,10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast(`Fisierul Excel a fost descarcat (${sel.length} indicatori)`, 'ok');
+    } catch(err) {
+      toast('Eroare: ' + err.message, 'err');
+    } finally {
+      btn.disabled = false;
+      document.getElementById('overlay').classList.remove('show');
+    }
+  }
+
+  function selectAllGeo() {
+    document.querySelectorAll('input[name="geo"]').forEach(cb => {
+      cb.checked = true;
+      cb.closest('.geo-item').classList.add('selected');
+    });
+  }
+  function deselectAllGeo() {
+    document.querySelectorAll('input[name="geo"]').forEach(cb => {
+      cb.checked = false;
+      cb.closest('.geo-item').classList.remove('selected');
+    });
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  sync();
+</script>
+</body>
+</html>
