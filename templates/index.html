@@ -116,6 +116,94 @@
     #btn-dl:active   { transform:translateY(0); }
     #btn-dl:disabled { opacity:.6; cursor:not-allowed; transform:none; box-shadow:none; }
 
+    /* preview button */
+    #btn-preview {
+      width:100%; padding:11px; margin-top:8px;
+      background:transparent; color:var(--gold);
+      border:1.5px solid var(--gold); border-radius:10px;
+      font-size:.95rem; font-weight:700;
+      cursor:pointer; transition:all .2s;
+      display:flex; align-items:center; justify-content:center; gap:8px;
+    }
+    #btn-preview:hover    { background:rgba(201,162,39,.1); transform:translateY(-1px); }
+    #btn-preview:active   { transform:translateY(0); }
+    #btn-preview:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+
+    /* ── PREVIEW MODAL ─────────────────────────────────────────────────── */
+    #preview-modal {
+      display:none; position:fixed; inset:0;
+      background:rgba(13,27,42,.97);
+      z-index:9000; flex-direction:column; overflow:hidden;
+    }
+    #preview-modal.show { display:flex; }
+
+    .modal-header {
+      background:var(--navy); padding:14px 28px;
+      display:flex; align-items:center; justify-content:space-between;
+      border-bottom:2px solid var(--gold); flex-shrink:0;
+      gap:12px;
+    }
+    .modal-header-left { display:flex; align-items:center; gap:12px; }
+    .modal-header h2   { color:var(--gold); font-size:1.05rem; font-weight:700; }
+    .modal-meta        { font-size:.75rem; color:#64748b; }
+    .modal-close {
+      background:none; border:1.5px solid rgba(201,162,39,.4);
+      color:var(--gold); padding:6px 16px; border-radius:6px;
+      cursor:pointer; font-size:.82rem; font-weight:700; transition:all .15s;
+      flex-shrink:0;
+    }
+    .modal-close:hover { background:rgba(201,162,39,.15); }
+
+    .modal-body { flex:1; overflow-y:auto; padding:20px 28px; }
+
+    .preview-summary {
+      font-size:.78rem; color:#64748b;
+      margin-bottom:18px; padding:10px 14px;
+      background:rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.07);
+      border-radius:7px; display:flex; gap:20px; flex-wrap:wrap;
+    }
+    .preview-summary span strong { color:#c9a227; }
+
+    .preview-category  { margin-bottom:28px; }
+    .preview-cat-title {
+      color:var(--gold); font-size:.75rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.1em;
+      margin-bottom:10px; padding-bottom:6px;
+      border-bottom:1px solid rgba(201,162,39,.25);
+    }
+    .preview-indicator {
+      margin-bottom:12px;
+      background:rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.07);
+      border-radius:8px; overflow:hidden;
+    }
+    .preview-ind-name {
+      padding:8px 14px; font-size:.82rem; font-weight:600; color:#cbd5e1;
+      background:rgba(26,58,92,.5);
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    .preview-error {
+      padding:8px 14px; font-size:.78rem; color:#ef4444;
+      font-style:italic;
+    }
+    .preview-table-wrap { overflow-x:auto; }
+    .preview-table { width:100%; border-collapse:collapse; font-size:.79rem; }
+    .preview-table th {
+      background:var(--navy); color:var(--gold);
+      padding:6px 14px; text-align:right;
+      font-weight:700; font-size:.73rem; white-space:nowrap;
+    }
+    .preview-table th:first-child { text-align:center; }
+    .preview-table td {
+      padding:5px 14px; text-align:right; color:#cbd5e1;
+      border-bottom:1px solid rgba(255,255,255,.04);
+    }
+    .preview-table td:first-child { text-align:center; font-weight:700; color:#94a3b8; }
+    .preview-table tr:nth-child(even) td { background:rgba(255,255,255,.02); }
+    .preview-table tr:hover td          { background:rgba(201,162,39,.04); }
+    .preview-table td.null-val          { color:#334155; }
+
     /* ── MAIN CONTENT ──────────────────────────────────────────────────── */
     .toolbar {
       display:flex; align-items:center; justify-content:space-between;
@@ -505,6 +593,11 @@
         <span>⬇️</span> Descarca Excel
       </button>
 
+      <!-- Preview -->
+      <button id="btn-preview" onclick="startPreview()">
+        <span>👁</span> Previzualizeaza Date
+      </button>
+
     </aside>
 
     <!-- ── MAIN CONTENT ── -->
@@ -552,6 +645,23 @@
         {% endfor %}
       </div>
     </main>
+  </div>
+</div>
+
+<!-- PREVIEW MODAL -->
+<div id="preview-modal">
+  <div class="modal-header">
+    <div class="modal-header-left">
+      <div class="logo" style="width:32px;height:32px;font-size:16px;">📊</div>
+      <div>
+        <h2>Previzualizare Date Eurostat</h2>
+        <div class="modal-meta" id="modal-meta"></div>
+      </div>
+    </div>
+    <button class="modal-close" onclick="closePreview()">✕ Inchide</button>
+  </div>
+  <div class="modal-body" id="preview-body">
+    <!-- populated by JS -->
   </div>
 </div>
 
@@ -672,6 +782,158 @@
       cb.checked = false;
       cb.closest('.geo-item').classList.remove('selected');
     });
+  }
+
+  // ── Preview ────────────────────────────────────────────────────────────────
+  async function startPreview() {
+    const geos = [...document.querySelectorAll('input[name="geo"]:checked')].map(c => c.value);
+    if (!geos.length) { toast('Selecteaza cel putin o tara!','err'); return; }
+
+    const sel = [...document.querySelectorAll('.ind-cb:checked')].map(c => c.value);
+    if (!sel.length)  { toast('Selecteaza cel putin un indicator!','err'); return; }
+
+    const ys = parseInt(document.getElementById('y-start').value);
+    const ye = parseInt(document.getElementById('y-end').value);
+    if (ys > ye)      { toast('Anul de inceput > Anul final!','err'); return; }
+
+    const btn = document.getElementById('btn-preview');
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> Se incarca...';
+
+    const modal = document.getElementById('preview-modal');
+    const body  = document.getElementById('preview-body');
+    document.getElementById('modal-meta').textContent =
+      `${sel.length} indicatori · ${geos.length} tari · ${ys}–${ye}`;
+
+    body.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:320px;gap:16px;">
+        <div class="spinner"></div>
+        <div style="color:#94a3b8;font-size:.9rem;font-weight:600;">Se descarca datele de la Eurostat...</div>
+        <div style="color:#475569;font-size:.78rem;text-align:center;">
+          Conectare la API · Procesare date<br>Te rog asteapta (30–60 sec)
+        </div>
+      </div>`;
+    modal.classList.add('show');
+
+    try {
+      const res = await fetch('/preview', {
+        method:  'POST',
+        headers: {'Content-Type':'application/json'},
+        body:    JSON.stringify({indicators: sel, geos, year_start: ys, year_end: ye})
+      });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const data = await res.json();
+      renderPreview(data.indicators, sel.length, geos.length, ys, ye);
+    } catch(err) {
+      body.innerHTML = `
+        <div style="color:#ef4444;padding:28px;font-size:.9rem;">
+          ❌ Eroare la incarcare: ${err.message}
+        </div>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<span>👁</span> Previzualizeaza Date';
+    }
+  }
+
+  function closePreview() {
+    document.getElementById('preview-modal').classList.remove('show');
+  }
+
+  // Close modal on Escape key
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closePreview();
+  });
+
+  function renderPreview(indicators, selCount, geoCount, ys, ye) {
+    const body = document.getElementById('preview-body');
+
+    const withData = indicators.filter(i => i.rows && i.rows.length > 0);
+    const noData   = indicators.filter(i => !i.rows || i.rows.length === 0);
+
+    document.getElementById('modal-meta').textContent =
+      `${selCount} indicatori selectati · ${geoCount} tari · ${ys}–${ye}`;
+
+    if (!withData.length) {
+      body.innerHTML = `
+        <div style="color:#94a3b8;padding:28px;text-align:center;">
+          Nu s-au gasit date pentru selectia curenta.
+        </div>`;
+      return;
+    }
+
+    // Group by category
+    const byCat = {};
+    withData.forEach(ind => {
+      if (!byCat[ind.category]) byCat[ind.category] = [];
+      byCat[ind.category].push(ind);
+    });
+
+    let html = `
+      <div class="preview-summary">
+        <span>✅ Date disponibile: <strong>${withData.length}</strong></span>
+        <span>⚠️ Fara date: <strong>${noData.length}</strong></span>
+        <span>📁 Categorii: <strong>${Object.keys(byCat).length}</strong></span>
+        <span style="color:#475569;font-size:.72rem;margin-left:auto;">
+          Apasa <kbd style="background:#1e293b;color:#94a3b8;padding:1px 5px;border-radius:3px;font-size:.7rem;">Esc</kbd> sau butonul X pentru a inchide
+        </span>
+      </div>`;
+
+    Object.entries(byCat).forEach(([cat, items]) => {
+      html += `<div class="preview-category">
+        <div class="preview-cat-title">${cat} (${items.length})</div>`;
+
+      items.forEach(ind => {
+        html += `<div class="preview-indicator">
+          <div class="preview-ind-name">${ind.name}</div>
+          <div class="preview-table-wrap">
+            <table class="preview-table"><thead><tr>`;
+
+        ind.columns.forEach(col => {
+          html += `<th>${col}</th>`;
+        });
+        html += `</tr></thead><tbody>`;
+
+        ind.rows.forEach(row => {
+          html += '<tr>';
+          ind.columns.forEach(col => {
+            const val = row[col];
+            if (val === null || val === undefined) {
+              html += `<td class="null-val">—</td>`;
+            } else if (col === 'An') {
+              html += `<td>${val}</td>`;
+            } else {
+              const fmt = typeof val === 'number'
+                ? val.toLocaleString('ro-RO', {minimumFractionDigits:2, maximumFractionDigits:2})
+                : val;
+              html += `<td>${fmt}</td>`;
+            }
+          });
+          html += '</tr>';
+        });
+
+        html += `</tbody></table></div></div>`;
+      });
+
+      html += `</div>`;
+    });
+
+    // Indicators with no data (collapsed section)
+    if (noData.length) {
+      html += `
+        <div style="margin-top:8px;padding:10px 14px;border:1px solid rgba(239,68,68,.15);
+                    border-radius:7px;background:rgba(239,68,68,.03);">
+          <div style="font-size:.75rem;color:#64748b;font-weight:600;margin-bottom:6px;">
+            ⚠️ Indicatori fara date disponibile (${noData.length})
+          </div>`;
+      noData.forEach(ind => {
+        html += `<div style="font-size:.75rem;color:#475569;padding:2px 0;">
+          · ${ind.name} ${ind.error ? `<span style="color:#ef4444">(${ind.error})</span>` : ''}
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    body.innerHTML = html;
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────

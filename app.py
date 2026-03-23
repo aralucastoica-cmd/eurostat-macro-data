@@ -577,6 +577,48 @@ def download():
     )
 
 
+@app.route("/preview", methods=["POST"])
+def preview():
+    payload    = request.get_json()
+    selected   = set(payload.get("indicators", []))
+    geos       = payload.get("geos",       ["RO", "EU27_2020"])
+    year_start = int(payload.get("year_start", 2010))
+    year_end   = int(payload.get("year_end",   2024))
+
+    chosen = [ind for ind in INDICATORS if ind["id"] in selected] if selected else INDICATORS
+    results = fetch_all_parallel(chosen, geos, year_start, year_end)
+
+    preview_data = []
+    for r in results:
+        if not r:
+            continue
+        entry = {
+            "name":     r["name"],
+            "category": r["category"],
+            "columns":  [],
+            "rows":     [],
+            "error":    r["error"],
+        }
+        df = r.get("df")
+        if df is not None and not df.empty and "time" in df.columns and "geo" in df.columns:
+            try:
+                pivot = df.pivot_table(index="time", columns="geo",
+                                       values="value", aggfunc="first")
+                pivot = pivot.sort_index(ascending=False)
+                pivot.columns = [GEO_LABELS.get(c, c) for c in pivot.columns]
+                entry["columns"] = ["An"] + list(pivot.columns)
+                for yr, row in pivot.iterrows():
+                    row_dict = {"An": str(yr)}
+                    for col, val in row.items():
+                        row_dict[col] = round(float(val), 2) if pd.notna(val) else None
+                    entry["rows"].append(row_dict)
+            except Exception as e:
+                entry["error"] = str(e)
+        preview_data.append(entry)
+
+    return jsonify({"indicators": preview_data})
+
+
 if __name__ == "__main__":
     import os
 
